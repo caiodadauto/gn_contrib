@@ -1,3 +1,5 @@
+from functools import partial
+
 import sonnet as snt
 import tensorflow as tf
 
@@ -10,17 +12,13 @@ __all__ = [
 
 
 class LeakyReluMLP(snt.Module):
-    def __init__(
-        self, hidden_size, num_of_layers, dropout_rate, alpha, name="LeakyReluMLP"
-    ):
+    def __init__(self, hidden_sizes, dropout_rate, alpha, name="LeakyReluMLP"):
         super(LeakyReluMLP, self).__init__(name=name)
         self._linear_layers = []
         self._alpha = alpha
-        self._hidden_size = hidden_size
         self._dropout_rate = dropout_rate
-        self._num_of_layers = num_of_layers
-        for _ in range(self._num_of_layers):
-            self._linear_layers.append(snt.Linear(self._hidden_size))
+        for hs in range(hidden_sizes):
+            self._linear_layers.append(snt.Linear(hs))
 
     def __call__(self, inputs, is_training):
         outputs_op = inputs
@@ -33,31 +31,32 @@ class LeakyReluMLP(snt.Module):
 
 
 class EdgeTau(snt.Module):
-    # TODO: Include the parameters in the initialization to add possible different dimensions for values, queries and keys
-    def __init__(self, key_model_fn, query_model_fn, value_model_fn, name="EdgeTau"):
+    def __init__(
+        self,
+        key_model_fn,
+        query_model_fn,
+        value_model_fn,
+        node_feature_dim,
+        key_feature_dim,
+        name="EdgeTau",
+    ):
         super(EdgeTau, self).__init__(name=name)
         self._key_model = key_model_fn()
         self._query_model = query_model_fn()
         self._value_model = value_model_fn()
-
-    @snt.once
-    def _initialize_feature_dimension(self, inputs):
-        dim_concat = inputs.shape[-1]
-        if dim_concat % 3 != 0:
-            raise ValueError(
-                "It is expected the concatenation of three"
-                " entity features for edge feature"
-            )
-        self._dim_feature = dim_concat // 3
+        self._predecessor_dim = node_feature_dim
+        self._ratio = tf.cast(key_feature_dim, tf.float32)
 
     def __call__(self, inputs, is_training):
-        self._initialize_feature_dimension(inputs)
-        predecessor_features = inputs[:, 0 : self._dim_feature]
+        predecessor_features = inputs[:, 0 : self._predecessor_dim]
         query = self._query_model(predecessor_features, is_training)
         key = self._key_model(inputs, is_training)
         value = self._value_model(inputs, is_training)
-        d = tf.math.sqrt(tf.cast(key.shape[-1], tf.float32))
-        alpha = tf.math.exp(tf.math.reduce_sum(query * key, keepdims=True, axis=-1) / d)
+        alpha = tf.math.exp(
+            tf.math.sigmoid(
+                tf.math.reduce_sum(query * key, keepdims=True, axis=-1) / self._ratio
+            )
+        )
         return tf.concat([alpha, value], axis=-1)
 
 
@@ -68,3 +67,53 @@ class NodeTau(snt.Module):
 
     def __call__(self, inputs, is_training):
         return self._value_model(inputs, is_training)
+
+
+def make_leaky_relu_mlp(hidden_sizes, dropout_rate=0.32, alpha=0.2):
+    return LeakyReluMLP(hidden_sizes, dropout_rate, alpha)
+
+
+def make_edge_tau(
+    key_hidden_sizes,
+    query_hidden_sizes,
+    value_hidden_sizes,
+    key_dropout_rate=0.32,
+    key_alpha=0.2,
+    query_dropout_rate=0.32,
+    query_alpha=0.2,
+    value_dropout_rate=0.32,
+    value_alpha=0.2,
+):
+    key_model_fn = partial(
+        make_leaky_relu_mlp,
+        key_hidden_sizes,
+        key_dropout_rate,
+        key_alpha,
+    )
+    query_model_fn = partial(
+        make_leaky_relu_mlp,
+        query_hidden_sizes,
+        query_dropout_rate,
+        query_alpha,
+    )
+    value_model_fn = partial(
+        make_leaky_relu_mlp,
+        value_hidden_sizes,
+        value_dropout_rate,
+        value_alpha,
+    )
+    return EdgeTau(key_model_fn, query_model_fn, value_model_fn)
+
+
+def make_node_tau(value_hidden_sizes, value_dropout_rate=0.32, value_alpha=0.2):
+    value_model_fn = partial(
+        make_leaky_relu_mlp,
+        value_hidden_sizes,
+        value_dropout_rate,
+        value_alpha,
+    )
+    return NodeTau(value_model_fn)
+
+
+def make_layer_norm(axis, scale=True, offset=True):
+    return snt.LayerNorm(axis, scale, offset)

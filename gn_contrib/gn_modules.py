@@ -4,7 +4,7 @@ from gn_contrib.blocks import EdgeBlock, NodeBlock
 from routergn.nn.utils import norm_values
 
 
-__all__ = ["GraphTopologyTranformer", "GraphRouter"]
+__all__ = ["GraphTopologyTranformer"]
 
 
 class GraphTopologyTranformer(snt.Module):
@@ -32,18 +32,3 @@ class GraphTopologyTranformer(snt.Module):
             self._edge_block(graphs, edge_model_kwargs=edge_model_kwargs),
             node_model_kwargs=node_model_kwargs,
         )
-
-
-class GraphRouter(snt.Module):
-    def __init__(
-        self,
-        edge_model_fn,
-        name="GraphRouter",
-    ):
-        super(GraphRouter, self).__init__(name=name)
-        self._edge_block = EdgeBlock(edge_model_fn=edge_model_fn, use_globals=False)
-
-    def __call__(self, graphs, edge_model_kwargs=None):
-        if edge_model_kwargs is None:
-            edge_model_kwargs = {}
-        return self._edge_block(graphs, edge_model_kwargs=edge_model_kwargs)
