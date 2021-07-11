@@ -36,7 +36,7 @@ class EdgeTau(snt.Module):
         key_model_fn,
         query_model_fn,
         value_model_fn,
-        node_feature_dim,
+        predecessor_dim,
         key_feature_dim,
         name="EdgeTau",
     ):
@@ -44,7 +44,7 @@ class EdgeTau(snt.Module):
         self._key_model = key_model_fn()
         self._query_model = query_model_fn()
         self._value_model = value_model_fn()
-        self._predecessor_dim = node_feature_dim
+        self._predecessor_dim = predecessor_dim
         self._ratio = tf.cast(key_feature_dim, tf.float32)
 
     def __call__(self, inputs, is_training):
@@ -77,6 +77,7 @@ def make_edge_tau(
     key_hidden_sizes,
     query_hidden_sizes,
     value_hidden_sizes,
+    predecessor_dim,
     key_dropout_rate=0.32,
     key_alpha=0.2,
     query_dropout_rate=0.32,
@@ -102,7 +103,13 @@ def make_edge_tau(
         value_dropout_rate,
         value_alpha,
     )
-    return EdgeTau(key_model_fn, query_model_fn, value_model_fn)
+    return EdgeTau(
+        key_model_fn,
+        query_model_fn,
+        value_model_fn,
+        predecessor_dim,
+        key_hidden_sizes[-1],
+    )
 
 
 def make_node_tau(value_hidden_sizes, value_dropout_rate=0.32, value_alpha=0.2):

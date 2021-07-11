@@ -1,7 +1,7 @@
 import sonnet as snt
 
 from gn_contrib.blocks import EdgeBlock, NodeBlock
-from routergn.nn.utils import norm_values
+from gn_contrib.utils import norm_values
 
 
 __all__ = ["GraphTopologyTranformer"]
