@@ -17,7 +17,7 @@ class LeakyReluMLP(snt.Module):
         self._linear_layers = []
         self._alpha = alpha
         self._dropout_rate = dropout_rate
-        for hs in range(hidden_sizes):
+        for hs in hidden_sizes:
             self._linear_layers.append(snt.Linear(hs))
 
     def __call__(self, inputs, is_training):
