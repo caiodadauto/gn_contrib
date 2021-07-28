@@ -1,5 +1,6 @@
 import tree
 import numpy as np
+import networkx as nx
 import tensorflow as tf
 from graph_nets import utils_np
 from graph_nets.graphs import NODES, EDGES, GLOBALS
@@ -40,7 +41,9 @@ def _nested_sum(input_graphs, field_name):
     return tree.map_structure(lambda *x: tf.math.add_n(x, name), *features_list)
 
 
-def sum(input_graphs, use_edges=True, use_nodes=True, use_globals=True, name="graph_sum"):
+def sum(
+    input_graphs, use_edges=True, use_nodes=True, use_globals=True, name="graph_sum"
+):
     if not input_graphs:
         raise ValueError("List argument `input_graphs` is empty")
     utils_np._check_valid_sets_of_keys([gr._asdict() for gr in input_graphs])
@@ -90,7 +93,12 @@ def _nested_concatenate(input_graphs, field_name, axis):
 
 
 def concat(
-    input_graphs, axis, use_edges=True, use_nodes=True, use_globals=True, name="graph_concat"
+    input_graphs,
+    axis,
+    use_edges=True,
+    use_nodes=True,
+    use_globals=True,
+    name="graph_concat",
 ):
     if not input_graphs:
         raise ValueError("List argument `input_graphs` is empty")
@@ -143,6 +151,19 @@ def networkxs_to_graphs_tuple(
     data_dicts = []
     try:
         for graph_nx in graph_nxs:
+            # FIXME: To be removed
+            nodes = graph_nx.nodes()
+            n_nodes = graph_nx.number_of_nodes()
+            mapping_labels = dict(
+                [
+                    (old_label, new_label)
+                    for old_label, new_label in zip(nodes, range(n_nodes))
+                ]
+            )
+            mapping_labels
+            graph_nx = nx.relabel.relabel_nodes(graph_nx, mapping_labels, copy=True)
+            ###########################################################################
+
             data_dict = networkx_to_data_dict(
                 graph_nx, node_shape_hint, edge_shape_hint, data_type_hint
             )
@@ -158,7 +179,5 @@ def networkxs_to_graphs_tuple(
 def networkx_to_graph_tuple_generator(nx_generator):
     for nx_in_graphs, nx_gt_graphs, raw_edge_features, _ in nx_generator:
         gt_in_graphs = networkxs_to_graphs_tuple(nx_in_graphs)
-        gt_gt_graphs = networkxs_to_graphs_tuple(
-            nx_gt_graphs
-        )
+        gt_gt_graphs = networkxs_to_graphs_tuple(nx_gt_graphs)
         yield gt_in_graphs, gt_gt_graphs, raw_edge_features
